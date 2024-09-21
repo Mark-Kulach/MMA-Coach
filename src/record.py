@@ -9,13 +9,12 @@ Run this using PC in basement
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-import time
 
 # Set up Chrome options
 chrome_options = Options()
 
 # Replace <YourUsername> with your actual Windows username
-chrome_options.add_argument("--user-data-dir=C:\Users\kulac\AppData\Local\Google\Chrome\User Data")
+chrome_options.add_argument(r"--user-data-dir=C:\\Users\\kulac\AppData\\Local\\Google\\Chrome\\User Data")
 chrome_options.add_argument("--profile-directory=Default")  # Change 'Default' if you use a different Chrome profile
 
 # Optionally, set the path to chromedriver.exe if it's not in the PATH environment variable
@@ -27,10 +26,7 @@ driver = webdriver.Chrome(options=chrome_options)
 # Open the webpage
 driver.get('https://ufcfightpass.com/season/24054')
 
-# Give time for the page to load completely
-time.sleep(30)
+input()
 
-# Perform your operations here (screen recording, pulling data, etc.)
-
-# Close the browser once done
+# Close the browser once done enter is pressed
 driver.quit()
