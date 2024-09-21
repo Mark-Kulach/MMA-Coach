@@ -25,8 +25,3 @@ driver = webdriver.Chrome(options=chrome_options)
 
 # Open the webpage
 driver.get('https://ufcfightpass.com/season/24054')
-
-input()
-
-# Close the browser once done enter is pressed
-driver.quit()
