@@ -4,10 +4,10 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
 # Database connection settings
-DB_HOST = 'localhost'
+DB_HOST = '2.tcp.ngrok.io'
 DB_NAME = 'mma_coach'
-DB_USER = 'postgres'  # replace with your PostgreSQL username
-DB_PASS = 'R@M$frappes1'  # replace with your PostgreSQL password
+DB_USER = 'postgres'
+DB_PASS = 'R@M$frappes1'
 
 USER_DATA_PATH = r"C:\\Users\\kulac\AppData\\Local\\Google\\Chrome\\User Data"
 
