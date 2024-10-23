@@ -4,8 +4,6 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.keys import Keys
 
 def login(bot):
     bot.get('https://ufcfightpass.com/login/')
@@ -99,8 +97,8 @@ def push_to_db(data):
 
 def main():
     driver = webdriver.Chrome()
-
     login(driver)
+    
     events = get_events(driver)
     push_to_db(events)
     
