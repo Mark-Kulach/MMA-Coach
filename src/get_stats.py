@@ -2,20 +2,17 @@ import psycopg2
 import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-import os
 import pickle
-
+import os
 
 def connect_to_db():
-    
     if os.name == "nt":
-        DB_HOST = input("Host:") + ".tcp.ngrok.io"
-        DB_PORT = input("Port:")
+        DB_HOST = input("HOST:") + ".tcp.ngrok.io"
+        DB_PORT = input("PORT:")
 
     else:
         DB_HOST = 'localhost'
         DB_PORT = 5432
-
     DB_NAME = 'mma_coach'
     DB_USER = 'postgres'
 
@@ -42,9 +39,8 @@ def get_stats():
         fights = []
         fight_urls = [el.get_attribute('data-link') for el in driver.find_elements(By.XPATH, "//td[@style='width:100px']/..")]
         
-        fight_data = {"event_id": id}
-
         for url in fight_urls:
+            fight_data = {"event_id": id}
             driver.get(url)
             time.sleep(2)
 
@@ -144,7 +140,6 @@ def format_stat(stat):
     else:
         stat = int(stat)
 
-    
     return stat
 
 
@@ -225,11 +220,13 @@ def main():
     global driver, conn, cursor
     conn, cursor = connect_to_db()
     driver = webdriver.Chrome()
+
     data = get_stats()
     with open("data.pkl", "wb") as file:
         pickle.dump(data, file)
 
     driver.quit()
+
 
 if __name__ == "__main__":
     main()
