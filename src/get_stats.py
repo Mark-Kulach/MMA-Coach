@@ -68,7 +68,7 @@ def get_stats():
                 if final_stats[i][-1] == ":":
                     final_stats[i] = els[i].find_element(By.XPATH, "..").text
 
-            final_stats = {item.split(": ")[0].lower(): item.split(": ")[1].lower() for item in final_stats[:3]}
+            final_stats = {item.split(": ")[0].lower(): item.split(": ")[1].lower() for item in final_stats}
             final_stats["end_time"] = final_stats.pop("time")
             fight_data.update(final_stats)
 
@@ -166,9 +166,9 @@ def push_to_db(data, conn):
 
             cursor.execute("""
                 INSERT INTO fights (event_id, title, outcome, method, round, end_time)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """, (fight_data["event_id"], fight_title, fight_data['outcome'], fight_data['method'], fight_data['round'], fight_data['end_time'])
+            """, (fight_data["event_id"], fight_title, fight_data['outcome'], fight_data['method'], fight_data["details"], fight_data['round'], fight_data['end_time'])
             )
 
             conn.commit()
