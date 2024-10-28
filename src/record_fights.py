@@ -17,6 +17,7 @@ def connect_to_db():
     else:
         DB_HOST = 'localhost'
         DB_PORT = 5432
+        
     DB_NAME = 'mma_coach'
     DB_USER = 'postgres'
 
@@ -41,7 +42,7 @@ def main():
     conn, cursor = connect_to_db()
     current_event = 1
 
-    cursor.execute("SELECT video_link FROM events WHERE id = %s", (current_event,))
+    cursor.execute("SELECT video_link FROM events WHERE id = %s", (current_event))
     link = cursor.fetchone()
     driver.get(link[0])
     time.sleep(5)
@@ -52,7 +53,7 @@ def main():
     while True:
         if end_of_video(driver):
             current_event += 1
-            cursor.execute("SELECT video_link FROM events WHERE id = %s", (current_event,))
+            cursor.execute("SELECT video_link FROM events WHERE id = %s", (current_event))
             link = cursor.fetchone()
 
             if link is None:

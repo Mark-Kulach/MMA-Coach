@@ -115,11 +115,10 @@ def get_stats():
                             else:
                                 temp[headers_strikes[stat]] = ok
 
-                if fighters.index(name) == 0:
-                    fighter_1.append(temp)
-                else:
-                    fighter_2.append(temp)
-
+                    if fighters.index(name) == 0:
+                        fighter_1.append(temp)
+                    else:
+                        fighter_2.append(temp)
 
             fight_data["fighter_1"] = fighter_1
             fight_data["fighter_2"] = fighter_2
