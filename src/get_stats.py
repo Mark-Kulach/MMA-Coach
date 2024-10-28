@@ -2,8 +2,9 @@ import psycopg2
 import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-import pickle
+import pickle   
 import os
+import re
 
 def connect_to_db():
     if os.name == "nt":
@@ -68,7 +69,17 @@ def get_stats():
                 if final_stats[i][-1] == ":":
                     final_stats[i] = els[i].find_element(By.XPATH, "..").text
 
-            final_stats = {item.split(": ")[0].lower(): item.split(": ")[1].lower() for item in final_stats}
+            new = {}
+            for item in final_stats:
+                try:
+                    if item.split(": ")[0].lower() == "details" and "decision" in new["method"]:
+                        new[item.split(": ")[0].lower()] = "NA"
+                    else:
+                        new[item.split(": ")[0].lower()] = item.split(": ")[1].lower()
+
+                except IndexError:
+                    pass
+            final_stats = new
             final_stats["end_time"] = final_stats.pop("time")
             fight_data.update(final_stats)
 
