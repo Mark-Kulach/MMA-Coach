@@ -3,16 +3,14 @@ import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 import os
-from pyngrok import ngrok
-
+import pickle
 
 
 def connect_to_db():
     
     if os.name == "nt":
-        ngrok_tunnel = ngrok.connect(5432)
-        public_url = ngrok_tunnel.public_url
-        DB_HOST, DB_PORT = public_url.split("://")[1].split(":")
+        DB_HOST = input("Host:") + ".tcp.ngrok.io"
+        DB_PORT = input("Port:")
 
     else:
         DB_HOST = 'localhost'
@@ -34,7 +32,7 @@ def pull_events():
     return {row[0]: row[1] for row in rows}
 
 
-def get_stats(driver):
+def get_stats():
     event_data = []
 
     for id, link in pull_events().items():
@@ -67,7 +65,6 @@ def get_stats(driver):
             
             fight_data["outcome"] = outcome
                         
-            
             els = driver.find_elements(By.XPATH, "//i[contains(@class, 'b-fight-details__text-item')]")
             final_stats = [el.text for el in els]
 
@@ -225,10 +222,13 @@ def push_to_db(data, conn):
 
 
 def main():
-    driver = webdriver.Chrome()
-    global conn, cursor
+    global driver, conn, cursor
     conn, cursor = connect_to_db()
-    push_to_db(get_stats(driver))
+    driver = webdriver.Chrome()
+    data = get_stats()
+    with open("data.pkl", "wb") as file:
+        pickle.dump(data, file)
+
     driver.quit()
 
 if __name__ == "__main__":
