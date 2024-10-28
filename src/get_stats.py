@@ -27,31 +27,25 @@ def connect_to_db():
     return conn, cursor
 
 
-def pull_events(conn, cursor):    
-    cursor.execute(f"SELECT title FROM events")
+def pull_events():    
+    cursor.execute("SELECT id, fight_link FROM events")
     rows = cursor.fetchall()
 
-    cursor.close()
-    conn.close()
-
-    return [row[0] for row in rows]    
+    return {row[0]: row[1] for row in rows}
 
 
-def get_stats(driver, conn, cursor):
-    driver.get("http://ufcstats.com/statistics/events/completed?page=all")
-
-    time.sleep(2)
-    events = list(reversed(driver.find_elements(By.XPATH, "//a[contains(@href, 'ufcstats.com/event-details')]")))
-    events = {element.text: element.get_attribute("href") for element in events if element.text in pull_events(conn, cursor)}
-
+def get_stats(driver):
     event_data = []
-    for link in events.values():
+
+    for id, link in pull_events().items():
         driver.get(link)
         time.sleep(2)
 
         fights = []
         fight_urls = [el.get_attribute('data-link') for el in driver.find_elements(By.XPATH, "//td[@style='width:100px']/..")]
         
+        fight_data = {"event_id": id}
+
         for url in fight_urls:
             driver.get(url)
             time.sleep(2)
@@ -61,7 +55,7 @@ def get_stats(driver, conn, cursor):
             fighters.sort()
             title = f"{fighters[0]} vs. {fighters[1]}"
 
-            fight_data = {"title": title}
+            fight_data["title"] = title
 
             outcome = "no contest"
             for el in fighter_el:
@@ -157,8 +151,9 @@ def format_stat(stat):
     return stat
 
 
-def push_to_db(data, conn, cursor):
+def push_to_db(data, conn):
     for event_data in data:
+
         for fight_data in event_data:
             base_title = fight_data['title']
             fight_title = base_title
@@ -176,11 +171,14 @@ def push_to_db(data, conn, cursor):
                     fight_title = f"{base_title} {counter}"
                     counter += 1
 
+
+
             cursor.execute("""
-                INSERT INTO fights (title, winner, method, round, end_time)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO fights (event_id, title, outcome, method, round, end_time)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """, (fight_title, fight_data['winner'], fight_data['method'], fight_data['round'], fight_data['end_time']))
+            """, (fight_data["event_id"], fight_title, fight_data['outcome'], fight_data['method'], fight_data['round'], fight_data['end_time'])
+            )
 
             conn.commit()
 
@@ -228,8 +226,9 @@ def push_to_db(data, conn, cursor):
 
 def main():
     driver = webdriver.Chrome()
+    global conn, cursor
     conn, cursor = connect_to_db()
-    push_to_db(get_stats(driver, conn, cursor), conn, cursor)
+    push_to_db(get_stats(driver))
     driver.quit()
 
 if __name__ == "__main__":
