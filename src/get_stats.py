@@ -4,7 +4,6 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 import pickle   
 import os
-import re
 
 def connect_to_db():
     if os.name == "nt":
@@ -79,6 +78,7 @@ def get_stats():
 
                 except IndexError:
                     pass
+
             final_stats = new
             final_stats["end_time"] = final_stats.pop("time")
             fight_data.update(final_stats)
@@ -153,90 +153,108 @@ def format_stat(stat):
     return stat
 
 
-def push_to_db(data, conn):
-    for event_data in data:
+def push_to_db(data):
+    try:
+        for event_data in data:
+            for fight_data in event_data:
+                # Check and set defaults for missing keys in fight_data
+                base_title = fight_data.get('title', 'Unknown Fight')
+                fight_title = base_title
+                counter = 2
+                
+                # Check for duplicates and create a unique title if needed
+                while True:
+                    cursor.execute("SELECT COUNT(*) FROM fights WHERE title = %s", (fight_title,))
+                    count_result = cursor.fetchone()
+                    count = count_result[0] if count_result else 0  # Safe handling of fetchone()
+                    
+                    if count == 0:
+                        break
+                    else:
+                        fight_title = f"{base_title} {counter}"
+                        counter += 1
+                
 
-        for fight_data in event_data:
-            base_title = fight_data['title']
-            fight_title = base_title
-            counter = 1
-
-            while True:
+                # Insert fight data into the `fights` table
                 cursor.execute("""
-                    SELECT COUNT(*) FROM fights WHERE title = %s
-                """, (fight_title,))
-                count = cursor.fetchone()[0]
+                    INSERT INTO fights (event_id, title, outcome, method, details, round, end_time)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (fight_data.get("event_id", None), 
+                      fight_title, 
+                      fight_data.get("outcome", "unknown"), 
+                      fight_data.get("method", "unknown"),
+                      fight_data.get("details", "N/A"),
+                      fight_data.get("round", 0), 
+                      fight_data.get("end_time", "00:00")))
+                conn.commit()
 
-                if count == 0:
-                    break
-                else:
-                    fight_title = f"{base_title} {counter}"
-                    counter += 1
+                # Retrieve the new fight ID for linking stats
+                fight_id_result = cursor.fetchone()
+                fight_id = fight_id_result[0] if fight_id_result else None
 
+                if fight_id is None:
+                    print("Error: Fight ID not retrieved correctly.")
+                    continue
 
-
-            cursor.execute("""
-                INSERT INTO fights (event_id, title, outcome, method, round, end_time)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            """, (fight_data["event_id"], fight_title, fight_data['outcome'], fight_data['method'], fight_data["details"], fight_data['round'], fight_data['end_time'])
-            )
-
-            conn.commit()
-
-            fight_id = cursor.fetchone()[0]
-
-            for i in ("1", "2"):
-
-                for round in range(len(fight_data["fighter_" + i])):
-                    w = fight_data["fighter_" + i][round]
-
-                    cursor.execute("""
-                            INSERT INTO stats (fight_id, round, fighter, sig_strikes, sig_strikes_att, tot_strikes, tot_strikes_att, td, td_att, sub_att, rev, ctrl, head, head_att, body, body_att, leg, leg_att, distance, distance_att, clinch, clinch_att, ground, ground_att)
+                # Loop over fighter stats (fighter_1, fighter_2)
+                for i in ("1", "2"):
+                    for round_num, round_data in enumerate(fight_data.get("fighter_" + i, [])):
+                        # Insert round stats for each fighter
+                        cursor.execute("""
+                            INSERT INTO stats (fight_id, round, fighter, kd, sig_strikes, sig_strikes_att, tot_strikes, 
+                                tot_strikes_att, td, td_att, sub_att, rev, ctrl, head, head_att, body, body_att, leg, 
+                                leg_att, distance, distance_att, clinch, clinch_att, ground, ground_att)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """, (fight_id, 
-                            round + 1,
-                            i, 
-                            w["sig_strikes"],
-                            w["sig_strikes_att"],
-                            w["tot_strikes"],
-                            w["tot_strikes_att"],
-                            w["td"],
-                            w["td_att"],
-                            w["sub_att"],
-                            w["rev"],
-                            w["ctrl"],
-                            w["head"],
-                            w["head_att"],
-                            w["body"],
-                            w["body_att"],
-                            w["leg"],
-                            w["leg_att"],
-                            w["distance"],
-                            w["distance_att"],
-                            w["clinch"],
-                            w["clinch_att"],
-                            w["ground"],
-                            w["ground_att"])
-                    )
+                        """, (fight_id, round_num + 1, int(i),
+                              round_data.get("kd", 0),
+                              round_data.get("sig_strikes", 0),
+                              round_data.get("sig_strikes_att", 0),
+                              round_data.get("tot_strikes", 0),
+                              round_data.get("tot_strikes_att", 0),
+                              round_data.get("td", 0),
+                              round_data.get("td_att", 0),
+                              round_data.get("sub_att", 0),
+                              round_data.get("rev", 0),
+                              round_data.get("ctrl", "0:00"),
+                              round_data.get("head", 0),
+                              round_data.get("head_att", 0),
+                              round_data.get("body", 0),
+                              round_data.get("body_att", 0),
+                              round_data.get("leg", 0),
+                              round_data.get("leg_att", 0),
+                              round_data.get("distance", 0),
+                              round_data.get("distance_att", 0),
+                              round_data.get("clinch", 0),
+                              round_data.get("clinch_att", 0),
+                              round_data.get("ground", 0),
+                              round_data.get("ground_att", 0)
+                             ))
+                        conn.commit()
 
-                    conn.commit()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        cursor.close()
+        conn.close()
 
-    cursor.close()
-    conn.close()
 
 
 def main():
     global driver, conn, cursor
     conn, cursor = connect_to_db()
-    driver = webdriver.Chrome()
+    if not os.path.exists("data.pkl"):
 
-    data = get_stats()
-    with open("data.pkl", "wb") as file:
-        pickle.dump(data, file)
+        driver = webdriver.Chrome()
+        data = get_stats()
+        with open("data.pkl", "wb") as file:
+            pickle.dump(data, file)
+        driver.quit()
 
-    driver.quit()
-
+    else:
+        with open("data.pkl", "rb") as temp:
+            data = pickle.load(temp)
+        push_to_db(data)
 
 if __name__ == "__main__":
     main()
