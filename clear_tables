@@ -1,0 +1,16 @@
+-- Drop foreign key constraints
+ALTER TABLE fights DROP CONSTRAINT fights_event_id_fkey;
+ALTER TABLE stats DROP CONSTRAINT stats_fight_id_fkey;
+
+-- Truncate tables and restart identity
+TRUNCATE TABLE fights RESTART IDENTITY CASCADE;
+TRUNCATE TABLE stats RESTART IDENTITY CASCADE;
+
+-- Add back foreign key constraints
+ALTER TABLE fights
+ADD CONSTRAINT fights_event_id_fkey
+FOREIGN KEY (event_id) REFERENCES events(id);
+
+ALTER TABLE stats
+ADD CONSTRAINT stats_fight_id_fkey
+FOREIGN KEY (fight_id) REFERENCES fights(id);
