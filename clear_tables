@@ -3,6 +3,7 @@ ALTER TABLE fights DROP CONSTRAINT fights_event_id_fkey;
 ALTER TABLE stats DROP CONSTRAINT stats_fight_id_fkey;
 
 -- Truncate tables and restart identity
+TRUNCATE TABLE events RESTART IDENTITY CASCADE;
 TRUNCATE TABLE fights RESTART IDENTITY CASCADE;
 TRUNCATE TABLE stats RESTART IDENTITY CASCADE;
 
