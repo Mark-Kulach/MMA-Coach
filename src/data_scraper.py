@@ -25,7 +25,7 @@ def login_fight_pass(bot):
     username_input.clear()
     username_input.send_keys("mark@markkulach.com")
     password_input.clear()
-    password_input.send_keys("3TJBiKqvXzJ!H9s")
+    password_input.send_keys("password")
 
     login_button = WebDriverWait(bot, 2).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit']")))
     login_button.click()
