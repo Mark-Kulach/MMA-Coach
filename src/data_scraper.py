@@ -9,14 +9,13 @@ from selenium.webdriver.common.action_chains import ActionChains
 from psycopg2 import sql
 
 import re
-import pickle
+import csv
 import os
 
-# FIX: fill in gaps
 
 def login_fight_pass(bot):
     bot.get('https://ufcfightpass.com/login/')
-    
+
     cookies = WebDriverWait(bot, 10).until(EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler")))
     cookies.click()
 
@@ -56,70 +55,44 @@ def scrape_event_footage(bot):
     return data
 
 
-def scrape_fighters():
-    # FIX: outline function
-    
-    pass
+def scrape_fighters(bot):
+    fighters = []
 
+    import string
 
-def scrape_fights(bot):
-    actions = ActionChains(bot)
-    login_fight_pass(bot)
-
-    cursor = connect_to_db()[1]
-
-    cursor.execute("SELECT id, video_link FROM events")
-    rows = {row[0]: row[1] for row in cursor.fetchall()}
-
-    output = []
-    title_counts = {} 
-
-    for id, video_link in rows.items():
-        bot.get(video_link)
+    for letter in string.ascii_lowercase:
+        bot.get(f"http://ufcstats.com/statistics/fighters?char={letter}&page=all")
         time.sleep(5)
 
-        try: 
-            hover_element = bot.find_element(By.XPATH, "//div[@class='ds-replay-player']")
+        rows = bot.find_elements(By.XPATH, "//tr[@class='b-statistics__table-row']")[2:]
 
-            actions.move_to_element(hover_element).perform()
-        except NoSuchElementException:
-            print("hover: " + str(id))
-            
-        try:
-            fight_card = bot.find_element(By.XPATH, "//div[@class='tab-wrapper tab-wrapper__fightCards hidden-xs']")
-            fight_card.find_element(By.TAG_NAME, "a").click()
-        except NoSuchElementException:
-            print("fight_card: " + str(id))
+        for row in rows:
+            temp = {"stats_link": None, "first_name": None, "last_name": None, "nickname": None}
+            cols = row.find_elements(By.XPATH, "./*")
 
-        time.sleep(2)
-        fights = bot.find_elements(By.XPATH, "//div[@class='versus']")
-        fights.reverse()
-        fights = [fight.find_elements(By.XPATH, ".//div[@class='versus__competitor-meta']") for fight in fights]
+            try:
+                temp["first_name"] = cols[0].text.lower()
+                temp["stats_link"] = cols[0].find_element(By.TAG_NAME, "a").get_attribute("href")
+            except:
+                pass
 
-        for i in range(len(fights)):
-            fight = fights[i]
+            try:
+                temp["last_name"] = cols[1].text.lower()
+                temp["stats_link"] = cols[1].find_element(By.TAG_NAME, "a").get_attribute("href")
 
-            for j in range(len(fight)):
-                fighter_data = fight[j]
-                h2_elements = fighter_data.find_elements(By.TAG_NAME, "h2")
-                combined_text = " ".join(h2.text.lower() for h2 in h2_elements)
+            except:
+                pass
 
-                fights[i][j] = combined_text
-
-            fight.sort()
-            fights[i] = f"{fight[0]} vs. {fight[1]}"
-
-            title = fights[i]
-            
-            if title in title_counts:
-                title_counts[title] += 1
-                title += f" {title_counts[title]}"
-            else:
-                title_counts[title] = 1
-            
-            output.append({"event_id": id, "title": title})
+            try:
+                temp["nickname"] = cols[2].text.lower()
+                temp["stats_link"] = cols[2].find_element(By.TAG_NAME, "a").get_attribute("href")
+            except:
+                pass
+                
+            fighters.append(temp)
     
-    return output
+    insert_data_to_table("fighters", fighters)
+
 
 
 def insert_data_to_table(table_name, data_list):
@@ -158,11 +131,9 @@ def connect_to_db():
 
 
 def scrape_links(bot):
-
     conn, cursor = connect_to_db()
 
     bot.get("http://ufcstats.com/statistics/events/completed?page=all")
-
     time.sleep(5)
 
     events = bot.find_elements(By.XPATH, "//a[contains(@href, '/event-details/')]")
@@ -170,7 +141,6 @@ def scrape_links(bot):
 
     for event in events:
         title = event.text.strip().lower()
-        stats_link = event.get_attribute("href")
 
         try: 
             if re.match(r"^UFC \d+:", title):
@@ -178,18 +148,38 @@ def scrape_links(bot):
             else:
                 title = title.split(":")[1].replace("vs ", "vs.").strip().lower()
                 
-            cursor.execute("UPDATE events SET stats_link = %s WHERE title LIKE %s", (stats_link, f"%{title}%")) 
+            cursor.execute("UPDATE events SET stats_link = %s WHERE title LIKE %s", (event.get_attribute("href"), f"%{title}%")) 
 
         except:
             pass
-
+    
     conn.close()
     cursor.close()
 
 
+def get_fight_links(bot):
+    conn, cursor = connect_to_db()
+
+    cursor.execute("SELECT (id, stats_link) FROM events")
+    for id, stats_link in cursor.fetchall():
+        bot.get(stats_link)
+        time.sleep(3)
+
+        cursor.execute("SELECT id FROM fights WHERE event_id = %s ORDER BY id ASC", (id,))
+        fight_rows = cursor.fetchall()
+
+        fight_urls = [el.get_attribute('data-link') for el in bot.find_elements(By.XPATH, "//td[@style='width:100px']/..")]
+        fight_urls.reverse()
+
+        for i in range(len(fight_urls)):
+            cursor.execute("UPDATE fights SET stats_link = %s WHERE id = %s", (fight_rows[i][0], fight_urls[i]))
+
+        # 
+    pass
+
+
 def scrape_stats(bot):
-    # FIX: pull stats_link from fights table
-    # FIX: 
+    # FIX: make it work with stats link by fight
     cursor = connect_to_db()[1]
 
     event_data = []
@@ -320,8 +310,101 @@ def format_stat(stat):
         return stat
 
 
+def scrape_fights(bot):
+    actions = ActionChains(bot)
+    login_fight_pass(bot)
+
+    cursor = connect_to_db()[1]
+
+    cursor.execute("SELECT id, video_link FROM events")
+    rows = {row[0]: row[1] for row in cursor.fetchall()}
+
+    output = []
+    title_counts = {} 
+
+    for id, video_link in rows.items():
+        bot.get(video_link)
+        time.sleep(10)
+
+        try: 
+            hover_element = bot.find_element(By.XPATH, "//div[@class='ds-replay-player']")
+
+            actions.move_to_element(hover_element).perform()
+        except NoSuchElementException:
+            print("hover: " + str(id))
+            
+        try:
+            time.sleep(.1)
+            fight_card = bot.find_element(By.XPATH, "//div[@class='tab-wrapper tab-wrapper__fightCards hidden-xs']")
+            fight_card.find_element(By.TAG_NAME, "a").click()
+        except NoSuchElementException:
+            print("fight_card: " + str(id))
+
+        time.sleep(2)
+        fights = bot.find_elements(By.XPATH, "//div[@class='versus']")
+        fights.reverse()
+        fights = [fight.find_elements(By.XPATH, ".//div[@class='versus__competitor-meta']") for fight in fights]
+
+        for i in range(len(fights)):
+            fight = fights[i]
+
+            for j in range(len(fight)):
+                fighter_data = fight[j]
+                h2_elements = fighter_data.find_elements(By.TAG_NAME, "h2")
+                combined_text = " ".join(h2.text.lower() for h2 in h2_elements)
+
+                fights[i][j] = combined_text
+
+            fight.sort()
+            fights[i] = f"{fight[0]} vs. {fight[1]}"
+
+            title = fights[i]
+            
+            if title in title_counts:
+                title_counts[title] += 1
+                title += f" {title_counts[title]}"
+            else:
+                title_counts[title] = 1
+            
+            output.append({"event_id": id, "title": title})
+
+            cursor.execute()
+
+    
+    for row in output:
+            cursor.execute("INSERT INTO fights (event_id, title) VALUES (%s, %s)", (row["event_id"], row["title"],))
+
+
+def scrape_stats_link(bot):
+    conn, cursor = connect_to_db()
+
+    cursor.execute("SELECT id, stats_link FROM events")
+    rows = {row[0]: row[1] for row in cursor.fetchall()}
+
+    for id_e, stats_link in rows.items():
+        cursor.execute("SELECT id, title FROM fights WHERE event_id = %s", (id_e,))
+        fights = {row[0]: row[1] for row in cursor.fetchall()}
+
+        bot.get(stats_link)
+
+        for id, title in fights.items():
+            fighters = [fighter.strip() for fighter in title.split("vs.")]
+            fighters = [fighter.rsplit(" ", 1)[0] if fighter.split()[-1].isdigit() else fighter for fighter in fighters]
+
+            for fighter in fighters:
+                try:
+                    link = bot.find_element(By.XPATH, f"//a[contains(text(), '{fighter.title()}')]/../../..").get_attribute("data-link")
+                    cursor.execute("UPDATE fights SET stats_link = %s WHERE id = %s", (link, id))
+                    break
+                except:
+                    if fighters.index(fighter) != 0:
+                        print(id, title)
+                    pass
+
+
 def push_stats(data):
     conn, cursor = connect_to_db()
+    # FIX: make it work with stats link by fight
 
     try:
         for event_data in data:
@@ -412,10 +495,62 @@ def merge_dictionaries(list1, list2, shared_key):
     return merged_list
 
 
+def temp_fix():
+    conn, cursor = connect_to_db()
+
+    query = """
+    WITH RankedFights AS (
+        SELECT 
+            f.id AS fight_id,
+            f.title AS fight_title,
+            f.event_id,
+            e.title AS event_title,
+            e.stats_link AS event_stats,
+            ROW_NUMBER() OVER (PARTITION BY f.event_id ORDER BY f.id DESC) AS fight_rank
+        FROM 
+            fights f
+        LEFT JOIN 
+            events e
+        ON 
+            f.event_id = e.id
+        WHERE 
+            e.title NOT LIKE '%prelims%'
+    )
+    SELECT 
+        fight_id,
+        fight_title,
+        event_id,
+        event_title,
+        event_stats2
+    FROM 
+        RankedFights
+    WHERE 
+        fight_rank = 1;
+    """
+
+    cursor.execute(query)
+    rows = cursor.fetchall()
+
+    for row in rows:
+        fight_title = re.sub(r'[^\w\s]', '', row[1].lower().strip())
+        event_title = re.sub(r'[^\w\s]', '', row[3].lower().strip())
+
+        fighters = fight_title.split(' vs ')
+    
+        count = 0
+        for fighter in fighters:
+            fighter_parts = fighter.split() 
+            if not any(part in event_title for part in fighter_parts):
+                count += 1
+
+            if count == 2:
+                print(row[2])
+                print()
+
 def main():
     driver = webdriver.Chrome()
-    scrape_links(driver)
-        
+    scrape_stats_link(driver)
+
 
 if __name__ == "__main__":
-    main()
+    temp_fix()
